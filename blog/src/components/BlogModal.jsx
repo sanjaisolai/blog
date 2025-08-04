@@ -36,7 +36,7 @@ function BlogModal({ onCreate }) {
         <Button className="bg-blue-500 text-white">+ Add Blog</Button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create a New Blog</DialogTitle>
         </DialogHeader>
@@ -49,7 +49,12 @@ function BlogModal({ onCreate }) {
 
           <div className="grid gap-2">
             <Label htmlFor="content">Content</Label>
-            <Textarea id="content" ref={contentRef} required />
+            <Textarea
+              id="content"
+              ref={contentRef}
+              required
+              className="min-h-[200px] max-h-[400px] overflow-y-auto"
+            />
           </div>
 
           <DialogFooter className="pt-4">
@@ -64,6 +69,7 @@ function BlogModal({ onCreate }) {
           </DialogFooter>
         </form>
       </DialogContent>
+
     </Dialog>
   );
 }
