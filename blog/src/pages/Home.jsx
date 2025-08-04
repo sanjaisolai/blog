@@ -11,20 +11,17 @@ function Home() {
   const [visibleBlogs, setVisibleBlogs] = useState([]);
   const [hasMore, setHasMore] = useState(true);
 
-  // Load blogs from localStorage on first render
   useEffect(() => {
     const storedBlogs = JSON.parse(localStorage.getItem('blogs')) || {};
     setBlogs(storedBlogs);
   }, []);
 
-  // Update visibleBlogs whenever blogs change
   useEffect(() => {
     const entries = Object.entries(blogs);
     setVisibleBlogs(entries.slice(0, batch));
     setHasMore(entries.length > batch);
   }, [blogs]);
 
-  // Load more blogs in infinite scroll
   const loadMore = () => {
     setTimeout(() => {
       const entries = Object.entries(blogs);
@@ -34,10 +31,9 @@ function Home() {
       if(entries.length <= currentLength + batch) {
         setHasMore(false);
       }
-    }, 500); // simulate delay
+    }, 500); // simulate delay for the api calls(did it because the fetching happens too fast so the loading text was flickering)
   };
 
-  // Handle blog creation
   const handleCreate = (newBlog) => {
     setBlogs(prev => {
       const updatedBlogs = { ...newBlog, ...prev };

@@ -24,7 +24,7 @@ function BlogDetail() {
     <div className="flex justify-between items-center p-4 bg-gray-900 sticky top-0 z-50">
       <button
         className="text-white bg-blue-600 px-4 py-2 rounded hover:bg-blue-700 transition"
-        onClick={() => window.history.back()} // or use a router navigate
+        onClick={() => navigate('/')} 
       >
         Go Back
       </button>

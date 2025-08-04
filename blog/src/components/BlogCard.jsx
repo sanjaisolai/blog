@@ -10,7 +10,6 @@ import {
 import { Link } from 'react-router-dom';
 
 const BlogCard = React.memo(function BlogCard({ blog, id }) {
-  console.log('BlogCard rendered for id:', id);
   const formattedDate = useMemo(() => {
     return new Date(blog.createdAt).toLocaleString();
   }, [blog.createdAt]);
