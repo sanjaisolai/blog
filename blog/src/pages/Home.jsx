@@ -4,7 +4,6 @@ import BlogModal from '../components/BlogModal.jsx';
 import InfiniteScroll from 'react-infinite-scroll-component';
 
 function Home() {
-  console.log('Component rendered');
 
   const batch = 3;
   const [blogs, setBlogs] = useState({});
