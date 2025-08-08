@@ -18,7 +18,7 @@ function BlogModal({ onCreate }) {
   const contentRef = useRef();
 
   const handleSubmit = (e) => {
-    e.preventDefault();
+    // e.preventDefault();
     const newBlog = {
       [uuidv4()]: {
         title: titleRef.current.value,
@@ -33,7 +33,7 @@ function BlogModal({ onCreate }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button className="bg-blue-500 text-white">+ Add Blog</Button>
+        <Button className="bg-grey-500 text-black border border-black">+ Add Blog</Button>
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">

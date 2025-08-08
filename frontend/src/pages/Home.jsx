@@ -43,8 +43,8 @@ function Home() {
 
   return (
     <>
-      <div className="flex justify-center bg-gray-900 sticky top-0 z-50">
-        <h1 className="m-5 font-bold text-3xl text-white">Blogs</h1>
+      <div className="flex justify-between bg-gray-300 sticky top-0 z-50">
+        <h1 className="m-5 font-bold text-3xl text-black">Blogs</h1>
         <div className="flex justify-end m-5">
           <BlogModal onCreate={handleCreate} />
         </div>
