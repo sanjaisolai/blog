@@ -77,7 +77,7 @@ function Home() {
   return (
     <>
       <div className="flex justify-between bg-gray-300 sticky top-0 z-50">
-        <h1 className="m-5 font-bold text-3xl text-black">Blogs</h1>
+        <h1 className="m-5 font-bold text-3xl text-black">Bloggy</h1>
         <div className="flex justify-end m-5">
           {hasToken && <BlogModal onCreate={handleCreate} />}
           {!hasToken && (

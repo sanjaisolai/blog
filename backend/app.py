@@ -105,7 +105,6 @@ def login(item: LoginItem):
     return JSONResponse({"access_token": access_token, "token_type": "bearer", "user_id": user_id, "name": name})
 
 
-# Remove BlogItem usage for addblog; switch to form-data and file upload
 @app.post("/addblog")
 def addblog(
     title: str = Form(...),
@@ -121,7 +120,6 @@ def addblog(
 
     image_url = None
     if image and image.filename:
-        # Content-Type and extension checks
         if not image.content_type or not image.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="Only image uploads are allowed.")
         _, ext = os.path.splitext(image.filename)
@@ -129,7 +127,7 @@ def addblog(
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(status_code=400, detail="Unsupported image format.")
 
-        # Stream to disk with size guard
+
         filename = f"{blog_id}{ext}"
         filepath = os.path.join(MEDIA_ROOT, filename)
         bytes_written = 0
@@ -149,10 +147,8 @@ def addblog(
                     raise HTTPException(status_code=413, detail=f"Image too large (>{MAX_UPLOAD_MB}MB).")
                 f.write(chunk)
 
-        # Build absolute URL to the uploaded file
         image_url = f"/media/{filename}"
 
-    # Use explicit column list (best practice)
     query = """
         INSERT INTO blog.blogdetails
             (id, user_id, title, content, "delete", createdat, "time", image_url)
@@ -167,7 +163,6 @@ def addblog(
         "image_url": image_url,
     }
 
-# Also include image_url in list/detail endpoints
 @app.get("/getblogs")
 def get_blogs(page: int = 1, limit: int = 5):
     offset = (page - 1) * limit
