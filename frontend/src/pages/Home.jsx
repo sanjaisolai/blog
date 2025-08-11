@@ -2,43 +2,76 @@ import { useEffect, useState } from 'react';
 import BlogCard from '../components/BlogCard.jsx';
 import BlogModal from '../components/BlogModal.jsx';
 import InfiniteScroll from 'react-infinite-scroll-component';
+import { Button } from "../components/ui/button";
+import { Link } from "react-router-dom"
+import axios from 'axios';
 
 function Home() {
-
-  const batch = 3;
-  const [blogs, setBlogs] = useState({});
-  const [visibleBlogs, setVisibleBlogs] = useState([]);
+  const [blogs, setBlogs] = useState([]);
+  const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [hasToken, setHasToken] = useState(false);
+  const limit = 6; // Number of blogs per page
 
+  
   useEffect(() => {
-    const storedBlogs = JSON.parse(localStorage.getItem('blogs')) || {};
-    setBlogs(storedBlogs);
+    fetchBlogs(1);
+    
+    if(localStorage.getItem("token")){
+      setHasToken(true);
+    }
   }, []);
 
-  useEffect(() => {
-    const entries = Object.entries(blogs);
-    setVisibleBlogs(entries.slice(0, batch));
-    setHasMore(entries.length > batch);
-  }, [blogs]);
-
-  const loadMore = () => {
-    setTimeout(() => {
-      const entries = Object.entries(blogs);
-      const currentLength = visibleBlogs.length;
-      const nextBatch = entries.slice(currentLength, currentLength + batch);
-      setVisibleBlogs(prev => [...prev, ...nextBatch]);
-      if(entries.length <= currentLength + batch) {
+  
+  const fetchBlogs = async (pageNum) => {
+    try {
+      const response = await axios.get(`http://localhost:8000/getblogs`, {
+        params: {
+          page: pageNum,
+          limit: limit
+        },
+      });
+      
+      const newBlogs = response.data.blogs;
+      
+      
+      
+      if (pageNum === 1) {
+        setHasMore(true);
+        setBlogs(newBlogs);
+      } else {
+        setBlogs(prevBlogs => [...prevBlogs, ...newBlogs]);
+      }
+      if (!newBlogs || newBlogs.length < limit) {
         setHasMore(false);
       }
-    }, 500); // simulate delay for the api calls(did it because the fetching happens too fast so the loading text was flickering)
+    } catch (error) {
+      console.error("Error fetching blogs:", error);
+      setHasMore(false);
+    }
   };
 
-  const handleCreate = (newBlog) => {
-    setBlogs(prev => {
-      const updatedBlogs = { ...newBlog, ...prev };
-      localStorage.setItem('blogs', JSON.stringify(updatedBlogs));
-      return updatedBlogs;
-    });
+ 
+  const loadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchBlogs(nextPage);
+  };
+
+ 
+  const handleCreate = async (newBlog) => {
+    try {
+      const response = await axios.post("http://localhost:8000/addblog", newBlog, {
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        }
+      });
+         fetchBlogs(1);
+          setPage(1);
+
+    } catch (e) {
+      throw new Error("Failed to create blog: " + e.message);
+    }
   };
 
   return (
@@ -46,12 +79,23 @@ function Home() {
       <div className="flex justify-between bg-gray-300 sticky top-0 z-50">
         <h1 className="m-5 font-bold text-3xl text-black">Blogs</h1>
         <div className="flex justify-end m-5">
-          <BlogModal onCreate={handleCreate} />
+          {hasToken && <BlogModal onCreate={handleCreate} />}
+          {!hasToken && (
+            <Button className="ml-[2vw]">
+              <Link to="/login">Login</Link>
+            </Button>
+          )}
+
+          {hasToken && (
+            <Button className="ml-[2vw]">
+              <Link to="/myblog">My Blogs</Link>
+            </Button>
+          )}
         </div>
       </div>
 
       <InfiniteScroll
-        dataLength={visibleBlogs.length}
+        dataLength={blogs.length}
         next={loadMore}
         hasMore={hasMore}
         loader={
@@ -60,9 +104,9 @@ function Home() {
           </div>
         }
       >
-        <div className="flex flex-col items-center gap-4 mt-4">
-          {visibleBlogs.map(([id, blog]) => (
-            <BlogCard key={id} blog={blog} id={id} />
+        <div className="flex items-center gap-4 mt-4 flex-wrap ml-[3vw]">
+          {blogs.map(blog => (
+            <BlogCard key={blog.id} blog={blog} id={blog.id} del={false} />
           ))}
         </div>
       </InfiniteScroll>
