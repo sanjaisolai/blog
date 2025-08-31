@@ -1,15 +1,18 @@
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.staticfiles import StaticFiles
 import os, uuid, datetime
+import pytz  # Add this import
 from db import db_insert,db_display, db_update
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from verify import verify_password,get_password_hash,create_access_token
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
+import bot
 from jose import JWTError, jwt
 from dotenv import load_dotenv
 import uvicorn
+import rag_pipeline
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -33,8 +36,6 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         return {"user_id": user_id, "name": name, "email": email}
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
-
-
 
 class Item(BaseModel):
     name:str
@@ -67,7 +68,8 @@ app.add_middleware(
  
 BASE_DIR = os.path.dirname(__file__)
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
-os.makedirs(MEDIA_ROOT, exist_ok=True)
+UPLOAD_DIR = os.path.join(MEDIA_ROOT, "uploads")  # Add this line
+os.makedirs(UPLOAD_DIR, exist_ok=True)  # Change this line
 app.mount("/media", StaticFiles(directory=MEDIA_ROOT), name="media")
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
@@ -104,20 +106,18 @@ def login(item: LoginItem):
     access_token = create_access_token(data={"sub": email})
     return JSONResponse({"access_token": access_token, "token_type": "bearer", "user_id": user_id, "name": name})
 
-
 @app.post("/addblog")
 def addblog(
     title: str = Form(...),
     content: str = Form(...),
-    createdAt: str = Form(...),
-    createdTime: str = Form(...),
     image: UploadFile | None = File(None),
     current_user: dict = Depends(get_current_user),
 ):
     blog_id = str(uuid.uuid4())
     user_id = current_user["user_id"]
     delete = 0
-
+    if not bot.check_blog_content_langchain(title, content):
+        raise HTTPException(status_code=410, detail="inappropriate content detected")
     image_url = None
     if image and image.filename:
         if not image.content_type or not image.content_type.startswith("image/"):
@@ -127,9 +127,8 @@ def addblog(
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(status_code=400, detail="Unsupported image format.")
 
-
         filename = f"{blog_id}{ext}"
-        filepath = os.path.join(MEDIA_ROOT, filename)
+        filepath = os.path.join(UPLOAD_DIR, filename)  # Change this line to use UPLOAD_DIR
         bytes_written = 0
         max_bytes = MAX_UPLOAD_MB * 1024 * 1024
         with open(filepath, "wb") as f:
@@ -147,14 +146,21 @@ def addblog(
                     raise HTTPException(status_code=413, detail=f"Image too large (>{MAX_UPLOAD_MB}MB).")
                 f.write(chunk)
 
-        image_url = f"/media/{filename}"
+        image_url = f"/media/uploads/{filename}"  # Change this line to include uploads/
 
+    # Set timestamps on server side with IST timezone
+    ist = pytz.timezone('Asia/Kolkata')
+    now = datetime.datetime.now(ist)
+    created_at = now.date().isoformat()  # "2025-08-29"
+    created_time = now.time().replace(microsecond=0).isoformat()  # "14:35:42" (clean IST time)
+    username=current_user["name"]
+    rag_pipeline.add_blog_to_pinecone(blog_id, f"{title}\nby {username}\n{content}")
     query = """
         INSERT INTO blog.blogdetails
             (id, user_id, title, content, "delete", createdat, "time", image_url)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
     """
-    values = (blog_id, user_id, title, content, delete, createdAt, createdTime, image_url)
+    values = (blog_id, user_id, title, content, delete, created_at, created_time, image_url)
     db_insert(query, values)
 
     return {
@@ -233,6 +239,41 @@ def delete_blog(id: str, current_user: dict = Depends(get_current_user)):
     query = "UPDATE blog.blogdetails SET delete = 1 WHERE id = %s AND user_id = %s"
     db_update(query, (id, user_id))
     return {"message": "Blog deleted successfully"}
+
+@app.post("/bot_call")
+async def bot_call(request: Request):
+    try:
+        # Parse incoming JSON
+        body = await request.json()
+        current_request = body.get("current_request", "")
+        previous_context = body.get("previous_context", [])
+        
+        # Validate request
+        if not current_request:
+            raise HTTPException(status_code=400, detail="Missing current_request")
+            
+        # Convert message history to conversation format
+        conversation_history = ""
+        if previous_context:
+            for msg in previous_context:
+                prefix = "User: " if msg["role"] == "user" else "Bot: "
+                conversation_history += f"{prefix}{msg['text']}\n"
+        
+        # Call RAG pipeline
+        response = rag_pipeline.query_rag(current_request, conversation_history)
+        
+        # # Also index the question and answer to improve future responses
+        # combined_text = f"Question: {current_request}\nAnswer: {response}"
+        # try:
+        #     rag_pipeline.add_blog_to_pinecone(f"chat-{uuid.uuid4()}", combined_text)
+        # except Exception as e:
+        #     print(f"Warning: Failed to index Q&A: {e}")
+            
+        return {"response": response}
+    except Exception as e:
+        print(f"Error in bot_call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     uvicorn.run("app:app", port=8000, reload=True)

@@ -5,6 +5,7 @@ import InfiniteScroll from 'react-infinite-scroll-component';
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom"
 import axios from 'axios';
+import { set } from 'zod';
 
 function Home() {
   const [blogs, setBlogs] = useState([]);
@@ -12,8 +13,8 @@ function Home() {
   const [hasMore, setHasMore] = useState(true);
   const [hasToken, setHasToken] = useState(false);
   const limit = 6; // Number of blogs per page
+  const [falseContent, setFalseContent] = useState(false);
 
-  
   useEffect(() => {
     fetchBlogs(1);
     
@@ -60,16 +61,21 @@ function Home() {
 
  
   const handleCreate = async (newBlog) => {
+    setFalseContent(false);
     try {
       const response = await axios.post("http://localhost:8000/addblog", newBlog, {
         headers: {
           "Authorization": `Bearer ${localStorage.getItem("token")}`
         }
       });
-         fetchBlogs(1);
-          setPage(1);
+      
+      fetchBlogs(1);
+      setPage(1);
 
     } catch (e) {
+      if (e.response && e.response.status === 410) {
+        setFalseContent(true);
+      }
       throw new Error("Failed to create blog: " + e.message);
     }
   };
@@ -79,7 +85,7 @@ function Home() {
       <div className="flex justify-between bg-gray-300 sticky top-0 z-50">
         <h1 className="m-5 font-bold text-3xl text-black">Bloggy</h1>
         <div className="flex justify-end m-5">
-          {hasToken && <BlogModal onCreate={handleCreate} />}
+          {hasToken && <BlogModal onCreate={handleCreate} falseContent={falseContent} />}
           {!hasToken && (
             <Button className="ml-[2vw]">
               <Link to="/login">Login</Link>
@@ -89,6 +95,14 @@ function Home() {
           {hasToken && (
             <Button className="ml-[2vw]">
               <Link to="/myblog">My Blogs</Link>
+            </Button>
+          )}
+          {hasToken && (
+            <Button className="ml-[2vw] bg-red-500" onClick={() => {
+              localStorage.removeItem("token");
+              setHasToken(false);
+            }}>
+              Logout
             </Button>
           )}
         </div>

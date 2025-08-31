@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-function BlogModal({ onCreate }) {
+function BlogModal({ onCreate, falseContent }) {
   const [open, setOpen] = useState(false);
   const titleRef = useRef();
   const contentRef = useRef();
@@ -38,7 +38,7 @@ function BlogModal({ onCreate }) {
     }
 
     try {
-      await onCreate?.(formData);
+      await onCreate(formData);
       setOpen(false);
       if (titleRef.current) titleRef.current.value = "";
       if (contentRef.current) contentRef.current.value = "";
@@ -74,6 +74,7 @@ function BlogModal({ onCreate }) {
           </div>
 
           {error && <p className="text-red-500 text-sm">{error}</p>}
+          {falseContent && <p className="text-red-500 text-sm">Inappropriate content detected, Check these following: 1. Title and content must be relevant to each other. 2. Title and content must not be gibberish or meaningless text. 3. Content should not contain harmful or offensive material.  </p>}
 
           <DialogFooter className="pt-4">
             <DialogClose asChild>
