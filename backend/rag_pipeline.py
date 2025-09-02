@@ -223,7 +223,7 @@ async def query_rag_stream(user_query: str, conversation_history: str = ""):
             messages=[{"role": "user", "content": prompt}],
             stream=True  # Enable streaming
         )
-        
+        print(stream)
         # Return the stream directly for FastAPI to consume
         return stream
     except Exception as e:

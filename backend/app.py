@@ -1,21 +1,21 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-import os, uuid, datetime
-import pytz  # Add this import
-from db import db_insert,db_display, db_update
+import os, uuid, datetime, json, asyncio
+import pytz
+from db import db_insert, db_display, db_update
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from verify import verify_password,get_password_hash,create_access_token
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
-import bot
+from verify import verify_password, get_password_hash, create_access_token
 from jose import JWTError, jwt
 from dotenv import load_dotenv
 import uvicorn
 import rag_pipeline
-import json
-import asyncio
-
+import bot
+from typing import Dict
+# Add this import at the top with other imports
+from fastapi.responses import JSONResponse, StreamingResponse
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -323,6 +323,84 @@ async def bot_call_stream(request: Request):
     except Exception as e:
         print(f"Error in bot_call_stream: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Add WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+
+    async def connect(self, websocket: WebSocket, client_id: str):
+        await websocket.accept()
+        self.active_connections[client_id] = websocket
+        print(f"Client {client_id} connected")
+
+    def disconnect(self, client_id: str):
+        if client_id in self.active_connections:
+            del self.active_connections[client_id]
+            print(f"Client {client_id} disconnected")
+
+    async def send_json(self, message: dict, client_id: str):
+        if client_id in self.active_connections:
+            await self.active_connections[client_id].send_json(message)
+
+# Initialize manager
+manager = ConnectionManager()
+
+# Add WebSocket endpoint
+@app.websocket("/ws/chat/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    print(f"New WebSocket connection from client {client_id}")
+    await manager.connect(websocket, client_id)
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_json()
+            print(f"Received message from client {client_id}: {data.get('current_request', '')}")
+            
+            current_request = data.get("current_request", "")
+            previous_context = data.get("previous_context", [])
+            
+            if not current_request:
+                await websocket.send_json({"error": "Missing current_request"})
+                continue
+                
+            # Convert message history to conversation format
+            conversation_history = ""
+            if previous_context:
+                for msg in previous_context:
+                    prefix = "User: " if msg["role"] == "user" else "Bot: "
+                    conversation_history += f"{prefix}{msg['text']}\n"
+            
+            # Get streaming response
+            print(f"Getting streaming response for: {current_request}")
+            stream = await rag_pipeline.query_rag_stream(current_request, conversation_history)
+            
+            # Stream response over WebSocket
+            try:
+                chunks_sent = 0
+                for chunk in stream:
+                    if hasattr(chunk.choices[0], 'delta') and chunk.choices[0].delta.content is not None:
+                        content = chunk.choices[0].delta.content
+                        if content:
+                            chunks_sent += 1
+                            await websocket.send_json({"chunk": content})
+                            # Small delay to prevent overwhelming the client
+                            await asyncio.sleep(0.01)
+                
+                # Signal completion
+                print(f"Completed streaming response, sent {chunks_sent} chunks")
+                await websocket.send_json({"complete": True})
+                
+            except Exception as e:
+                print(f"Streaming error: {e}")
+                await websocket.send_json({"error": str(e)})
+                
+    except WebSocketDisconnect:
+        print(f"WebSocket disconnected: client {client_id}")
+        manager.disconnect(client_id)
+    except Exception as e:
+        print(f"WebSocket error for client {client_id}: {e}")
+        manager.disconnect(client_id)
 
 
 if __name__ == "__main__":
