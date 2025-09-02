@@ -6,13 +6,16 @@ from db import db_insert,db_display, db_update
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from verify import verify_password,get_password_hash,create_access_token
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordBearer
 import bot
 from jose import JWTError, jwt
 from dotenv import load_dotenv
 import uvicorn
 import rag_pipeline
+import json
+import asyncio
+
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -272,6 +275,53 @@ async def bot_call(request: Request):
         return {"response": response}
     except Exception as e:
         print(f"Error in bot_call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/bot_call_stream")
+async def bot_call_stream(request: Request):
+    try:
+        # Parse incoming JSON
+        body = await request.json()
+        current_request = body.get("current_request", "")
+        previous_context = body.get("previous_context", [])
+        
+        # Validate request
+        if not current_request:
+            raise HTTPException(status_code=400, detail="Missing current_request")
+            
+        # Convert message history to conversation format
+        conversation_history = ""
+        if previous_context:
+            for msg in previous_context:
+                prefix = "User: " if msg["role"] == "user" else "Bot: "
+                conversation_history += f"{prefix}{msg['text']}\n"
+        
+        # Get streaming response
+        stream = await rag_pipeline.query_rag_stream(current_request, conversation_history)
+        
+        # Define a streaming response generator
+        async def stream_generator():
+            try:
+                for chunk in stream:
+                    if hasattr(chunk.choices[0], 'delta') and chunk.choices[0].delta.content is not None:
+                        content = chunk.choices[0].delta.content
+                        if content:
+                            # Send each chunk as a JSON object with a newline delimiter
+                            yield json.dumps({"chunk": content}) + "\n"
+                            # Add a small delay to prevent overwhelming the client
+                            await asyncio.sleep(0.01)
+            except Exception as e:
+                print(f"Streaming error: {e}")
+                yield json.dumps({"error": str(e)}) + "\n"
+        
+        # Return a streaming response
+        return StreamingResponse(
+            stream_generator(),
+            media_type="application/x-ndjson"  # Newline-delimited JSON
+        )
+            
+    except Exception as e:
+        print(f"Error in bot_call_stream: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
