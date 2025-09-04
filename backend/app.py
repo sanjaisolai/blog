@@ -12,6 +12,7 @@ from jose import JWTError, jwt
 from dotenv import load_dotenv
 import uvicorn
 import rag_pipeline
+import rag_pipeline2 
 import bot
 from typing import Dict
 # Add this import at the top with other imports
@@ -373,28 +374,31 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             
             # Get streaming response
             print(f"Getting streaming response for: {current_request}")
-            stream = await rag_pipeline.query_rag_stream(current_request, conversation_history)
-            
-            # Stream response over WebSocket
-            try:
-                chunks_sent = 0
-                for chunk in stream:
-                    if hasattr(chunk.choices[0], 'delta') and chunk.choices[0].delta.content is not None:
-                        content = chunk.choices[0].delta.content
-                        if content:
-                            chunks_sent += 1
-                            await websocket.send_json({"chunk": content})
-                            # Small delay to prevent overwhelming the client
-                            await asyncio.sleep(0.01)
-                
-                # Signal completion
-                print(f"Completed streaming response, sent {chunks_sent} chunks")
+            stream = await rag_pipeline2.agentic_ai_with_tools(current_request, conversation_history)
+            if type(stream) is str:
+                await websocket.send_json({"chunk": stream})
                 await websocket.send_json({"complete": True})
-                
-            except Exception as e:
-                print(f"Streaming error: {e}")
-                await websocket.send_json({"error": str(e)})
-                
+            else:
+            # Stream response over WebSocket
+                try:
+                    chunks_sent = 0
+                    for chunk in stream:
+                        if hasattr(chunk.choices[0], 'delta') and chunk.choices[0].delta.content is not None:
+                            content = chunk.choices[0].delta.content
+                            if content:
+                                chunks_sent += 1
+                                await websocket.send_json({"chunk": content})
+                                # Small delay to prevent overwhelming the client
+                                await asyncio.sleep(0.01)
+                    
+                    # Signal completion
+                    print(f"Completed streaming response, sent {chunks_sent} chunks")
+                    await websocket.send_json({"complete": True})
+                    
+                except Exception as e:
+                    print(f"Streaming error: {e}")
+                    await websocket.send_json({"error": str(e)})
+                    
     except WebSocketDisconnect:
         print(f"WebSocket disconnected: client {client_id}")
         manager.disconnect(client_id)

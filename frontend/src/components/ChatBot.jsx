@@ -19,7 +19,8 @@ export default function ChatBot() {
   const [messages, setMessages] = useState([]) 
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [streamingMessageId, setStreamingMessageId] = useState(null)
+  // const [streamingMessageId, setStreamingMessageId] = useState("")
+  const [botMessageId, setBotMessageId] = useState("")
   const streamingMessageIdRef = useRef(null)
   const [wsConnected, setWsConnected] = useState(false)
   const messagesEndRef = useRef(null)
@@ -49,7 +50,7 @@ export default function ChatBot() {
       }
       setWsConnected(false)
       setIsLoading(false)
-      setStreamingMessageId(null) 
+      streamingMessageIdRef.current = null
     }
   }, [open])
   
@@ -58,7 +59,7 @@ export default function ChatBot() {
     
     try {
       const ws = new WebSocket(`ws://localhost:8000/ws/chat/${clientIdRef.current}`)
-      
+      wsRef.current = ws
       ws.onopen = () => {
         console.log('WebSocket Connected')
         setWsConnected(true)
@@ -78,7 +79,7 @@ export default function ChatBot() {
               )
             )
             setIsLoading(false)
-            setStreamingMessageId(null)
+            streamingMessageIdRef.current = null
             return
           }
           
@@ -89,12 +90,6 @@ export default function ChatBot() {
                   ? { ...msg, text: msg.text + data.chunk }
                   : msg
               );
-              // const botMsg = updated.find(msg => msg.id === streamingMessageId);
-              // if (botMsg) {
-              //   console.log("Bot message after chunk:", botMsg.text);
-              // } else {
-              //   console.log("Bot message not found");
-              // }
                return updated;
             });
           }
@@ -102,7 +97,7 @@ export default function ChatBot() {
           if (data.complete) {
             console.log("Message complete");
             setIsLoading(false)
-            setStreamingMessageId(null)
+            streamingMessageIdRef.current = null
           }
         } catch (e) {
           console.error("Error parsing WebSocket message:", e, "Raw data:", event.data);
@@ -127,7 +122,7 @@ export default function ChatBot() {
         setWsConnected(false)
       }
       
-      wsRef.current = ws
+      
     } catch (error) {
       console.error('Error creating WebSocket:', error)
       setWsConnected(false)
@@ -165,7 +160,8 @@ export default function ChatBot() {
       role: "bot", 
       text: "" // Start with empty text
     }])
-    setStreamingMessageId(botMessageId)
+    setBotMessageId(botMessageId)
+
     streamingMessageIdRef.current = botMessageId
     // Send message via WebSocket
     wsRef.current.send(JSON.stringify({
@@ -173,6 +169,7 @@ export default function ChatBot() {
       previous_context: messages
     }))
   }
+
 
   // Handle Enter key for sending (Shift+Enter for new line)
   const handleKeyDown = (e) => {
@@ -231,13 +228,13 @@ export default function ChatBot() {
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {msg.text}
                   </ReactMarkdown>
-                  {msg.id === streamingMessageId && (
+                  {msg.id === streamingMessageIdRef.current && (
                     <span className="inline-block w-1 h-4 ml-1 bg-black animate-pulse" />
                   )}
                 </div>
               ))}
-              
-              {isLoading && !streamingMessageId && (
+
+              {isLoading && !streamingMessageIdRef.current && (
                 <div className="bg-gray-200 text-black p-3 rounded-lg max-w-[80%] flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Thinking...</span>
